@@ -1,0 +1,97 @@
+[
+ ;; Universities
+ {
+    :db/id #db/id[:db.part/user -1000000],
+    :uni/name "University of Oxford",
+    :uni/country :country/uk
+ }
+ {
+    :db/id #db/id[:db.part/user -1000001],
+    :uni/name "University of Cambridge",
+    :uni/country :country/uk
+ }
+ {
+    :db/id #db/id[:db.part/user -1000002],
+    :uni/name "Harvard",
+    :uni/country :country/us
+ }
+ {
+    :db/id #db/id[:db.part/user -1000003],
+    :uni/name "La Sorbonne",
+    :uni/country :country/fr
+ }
+ {
+    :db/id #db/id[:db.part/user -1000004],
+    :uni/name "Karl Eberhardt Universität, Tübingen"
+    :uni/country :country/de
+ }
+ {
+    :db/id #db/id[:db.part/user -1000005],
+    :uni/name "Victoria University of Wellington"
+    :uni/country :country/nz
+ }
+
+ ;; Users
+
+ ;; For Oxford
+ {
+   :db/id #db/id[:db.part/user -1000006],
+   :user/name "User A"
+   :user/uni #db/id[:db.part/user -1000000]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000007],
+   :user/name "User B"
+   :user/uni #db/id[:db.part/user -1000000]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000008],
+   :user/name "User C"
+   :user/uni #db/id[:db.part/user -1000000]
+ }
+ ;; For Cambridge
+ {
+   :db/id #db/id[:db.part/user -1000009],
+   :user/name "User D"
+   :user/uni #db/id[:db.part/user -1000001]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000010],
+   :user/name "User E"
+   :user/uni #db/id[:db.part/user -1000001]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000011],
+   :user/name "User F"
+   :user/uni #db/id[:db.part/user -1000001]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000012],
+   :user/name "User G"
+   :user/uni #db/id[:db.part/user -1000001]
+ }
+
+ ;; Projects
+
+ {
+   :db/id #db/id[:db.part/user -1000013],
+   :project/name "Geography 101"
+   :project/owner #db/id[:db.part/user -1000010]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000014],
+   :project/name "History 101"
+   :project/owner #db/id[:db.part/user -1000010]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000015],
+   :project/name "Chemistry 101"
+   :project/owner #db/id[:db.part/user -1000010]
+ }
+ {
+   :db/id #db/id[:db.part/user -1000016],
+   :project/name "Art History 101"
+   :project/owner #db/id[:db.part/user -1000010]
+ }
+
+]

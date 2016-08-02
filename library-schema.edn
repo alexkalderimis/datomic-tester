@@ -1,0 +1,84 @@
+[
+ ;; User
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :user/name
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "The user name"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :user/uni
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "A user's institution"
+  :db.install/_attribute :db.part/db}
+
+ ;; Uni (Institution)
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :uni/name
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "The uni's name"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :uni/country
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "A institution country enum value"
+  :db.install/_attribute :db.part/db}
+
+ ;; :uni/country enum values
+ [:db/add #db/id[:db.part/user] :db/ident :country/uk]
+ [:db/add #db/id[:db.part/user] :db/ident :country/us]
+ [:db/add #db/id[:db.part/user] :db/ident :country/de]
+ [:db/add #db/id[:db.part/user] :db/ident :country/fr]
+ [:db/add #db/id[:db.part/user] :db/ident :country/ru]
+ [:db/add #db/id[:db.part/user] :db/ident :country/au]
+ [:db/add #db/id[:db.part/user] :db/ident :country/nz]
+
+ ;; Projects
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :project/name
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/fulltext true
+  :db/doc "A project's name"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :project/owner
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "The user this project belongs to"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :project/collaborator
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/many
+  :db/doc "users this project is accessible to"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :project/description
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/fulltext true
+  :db/doc "A project's description"
+  :db.install/_attribute :db.part/db}
+
+ ;; Reference
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :reference/project
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "The project this reference belongs to"
+  :db.install/_attribute :db.part/db}
+
+ ]

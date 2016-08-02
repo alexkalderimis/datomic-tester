@@ -1,17 +1,16 @@
 (ns datomic-tester.core
-  (:use    [datomic.api :only [db q] :as d])
-  (:import [datomic Peer Util] ;; Imports only used in data loading
-           [java.io FileReader]))
+  (:require [datomic.api :as d])
+  (:import  [datomic Peer Util] ;; Imports only used in data loading
+            [java.io FileReader]))
 
+(comment 
 
-(comment  ;; Stick everything in comment so it doesn't run in swank
+  ;; A Tour of Datomic - a time travelling database
 
-  ;; Define URI
-  ;; ---------
-  ;; Persistent Dev setup, requires setting up transactor with config/samples/dev-transactor.properties
-  (def conn-uri "datomic:dev://localhost:4334/seattle")
+  (def persistent-storage "datomic:dev://localhost:4334/my-db")
+
   ;; In-memory, gone after disconnect I imagine...
-  (def conn-uri "datomic:mem://seattle")
+  (def conn-uri "datomic:mem://library")
   
   ;; Create database from URI
   (d/create-database conn-uri)
@@ -19,106 +18,89 @@
   ;; Connect to existing database via URI
   (def conn (d/connect conn-uri))
 
+  (def empty-db (d/db conn))
+
   ;; Load Sample data
-  (def datomic-path "/home/abusby/Downloads/datomic-0.1.3164/")
   (do
     ;; Setup sample schema
-    (.get (.transact conn
-                     (first (Util/readAll
-                             (FileReader. (str datomic-path "samples/seattle/seattle-schema.dtm"))))))
+    (d/transact conn
+              (first (Util/readAll (FileReader. "library-schema.edn"))))
 
     ;; load sample data
-    (.get (.transact conn
-                     (first (Util/readAll
-                             (FileReader. (str datomic-path "samples/seattle/seattle-data0.dtm"))))))
+    (d/transact conn
+              (first (Util/readAll (FileReader. "library-data0.edn"))))
 
-    ;; load more sample data
-    (def future-data (first (Util/readAll
-                             (FileReader. (str datomic-path "samples/seattle/seattle-data0.dtm")))))
     )
   
-  ;; find all community record wit community name
-  (q '[:find ?c
+  ;; find all institutions (i.e. entities that have a :uni/name)
+  (d/q '[:find ?e
        :where
-       [?c :community/name]]
-     (db conn))
+       [?e :uni/name]]
+     (d/db conn))
+
+  (d/q '[:find ?e :where [?e :uni/name]] empty-db)
 
   ;; find all records,
-  ;; then get entity's for each,
+  ;; then get entities for each,
   ;; then extract the record name
-  (map (comp :community/name
-             #(d/entity (db conn) %)
-             first)
-       (q '[:find ?c :where [?c :community/name]]
-          (db conn)))
-  
-  ;; Query query out the wanted fields
-  (q '[:find ?n ?u
-       :where
-       [?c :community/name ?n]
-       [?c :community/url ?u]]
-     (db conn))
+  (let [db (d/db conn)]
+    (map (comp :uni/name
+              #(d/entity db %)
+              first)
+        (d/q '[:find ?e :where [?e :uni/name]] db)))
 
-  ;; Define query parameters
-  (q '[:find ?e ?c
+  ;; Find their names
+  (d/q '[:find ?n
        :where
-       [?e :community/name "belltown"]
-       [?e :community/category ?c]]
-     (db conn))
+       [?u :uni/name ?n] ]
+     (d/db conn))
   
-  ;; Query by chained relationships
-  (q '[:find ?c_name ?r_name
+  ;; Define query parameters
+  (d/q '[:find ?e ?n
        :where
-       [?c :community/name ?c_name]
-       [?c :community/neighborhood ?n]
-       [?n :neighborhood/district ?d]
-       [?d :district/region ?r]
-        [?r :db/ident ?r_name]]
-     (db conn))
+       [?e :uni/country :country/uk]
+       [?e :uni/name ?n]]
+     (d/db conn))
+
+  ;; Use full-text search
+  (d/q '[:find ?e ?n
+       :where
+       [(fulltext $ :project/name "history") [[?e ?n]]]]
+     (d/db conn))
+  
+
+
+
+
+  ;; Query by chained relationships
+  (d/q '[:find ?p_name ?u_name
+       :where
+       [?p :project/name ?p_name]
+       [?p :project/owner ?u]
+       [?u :user/uni ?uni]
+       [?uni :uni/name ?u_name]]
+     (d/db conn))
+
+
+
+
+
+
+  ;; Query by chained relationships
+  (d/q '[:find ?p_name ?u_name
+       :where
+
+       [?p :project/name ?p_name]
+
+       [?p :project/owner ?u]
+                         [?u :user/uni ?uni]
+                                      [?uni :uni/name ?u_name]]
+     (d/db conn))
 
   ;; Retrieve an individual entity
-  (d/entity (conn db) 17592186045516) ;; Where that giant number should be from one of the earlier record queries
-
-  ;; Binding parameters to query
-  (q '[:find ?n
-       :in $ ?t
-       :where
-       [?c :community/name ?n]
-       [?c :community/type ?t]]
-     (db conn)
-     :community.type/twitter)
-
-  ;; Using functions in query
-  (q '[:find ?n
-       :where
-       [?c :community/name ?n]
-       [(.compareTo ^String ?n "C") ?res]
-       [(< ?res 0)]]
-     (db conn))
-
-  ;; Or better yet, Clojure style functions
-  (q '[:find ?n
-       :where
-       [?c :community/name ?n]
-       [(#(< (.compareTo ^String % "C") 0) ?n)]]
-     (db conn))
-
-  ;; Using "full text search" capability, if defined as part of schema
-  (q '[:find ?n
-       :where
-        [(fulltext $ :community/name "wallingford") [[?e ?n]]]]
-     (db conn))
-
-  ;; Parameterized full text search...
-  (q '[:find ?name ?cat
-       :in $ ?type ?search
-       :where
-       [?c :community/name ?name]
-       [?c :community/type ?type]
-        [(fulltext $ :community/category ?search) [[?c ?cat]]]]
-     (db conn)
-     :community.type/website
-     "food")
+  (-> (d/db conn)
+      (d/entity 17592186045431)
+      first)
 
   ;; Using rules, think of them as awesome SQL WHERE macros
   (def twitter-rule '[[[twitter ?c] [?c :community/type :community.type/twitter]]])
@@ -175,27 +157,6 @@
      (db conn)
      hierarchical-rules)  
   
-  ;; Find when transactions have executed  
-  (q '[:find ?when
-       :where
-        [?tx :db/txInstant ?when]]
-     (db conn))
-
-  ;; Query and define the various DB states
-  (def db-dates (->> (q '[:find ?when
-                          :where
-                          [?tx :db/txInstant ?when]]
-                        (db conn))
-                     seq
-                     (map first)
-                     sort))
-
-  ;; Query against the past db state
-  (count (q '[:find ?c :where [?c :community/name]]
-            (d/as-of (db conn) (last db-dates))))
-  (count (q '[:find ?c :where [?c :community/name]]
-            (d/as-of (db conn) (first db-dates))))
-
   ;; Modifying the data queried against, but *WITHOUT* changing the DB
   (count (q '[:find ?c :where [?c :community/name]]
             (d/with (db conn) future-data)))
@@ -206,222 +167,134 @@
   ;; Anything in a map counts as ADD/UPDATE (depending on if the id already exists or not)
   (d/transact conn
               '[{:db/id #db/id [:db.part/user]
-                 :community/name
-                 "Easton"}])
+                 :uni/name "Loughborough"}])
 
   ;; Add more than one record at a time
   (d/transact conn
-              '[{:db/id #db/id [:db.part/user] :community/name "foo"}
-                {:db/id #db/id [:db.part/user] :community/name "bar"}
-                {:db/id #db/id [:db.part/user] :community/name "baz"}])
-  
-  ;; Transaction, update records
-  (let [baz-id (-> (q '[:find ?c
-                        :where
-                        [?c :community/name "baz"]]
-                      (db conn))
-                   first
-                   first)] ;; get the ID to modify
-    (d/transact conn ;; Note use back-tick, so we can unquote the value of baz-id
-                `[{:db/id ~baz-id :community/name "bazzer"}]))
+              '[{:db/id #db/id [:db.part/user]
+                 :user/name "foo"}
+                {:db/id #db/id [:db.part/user]
+                 :user/name "bar"}
+                {:db/id #db/id [:db.part/user]
+                 :user/name "baz"}])
 
-  ;; Transaction, delete record
-  (let [val    "foo"
-        val-id (-> (q `[:find ?c
-                        :where
-                        [?c :community/name ~val]]
-                      (db conn))
-                   first
-                   first)] ;; get the ID to modify
-    (d/transact conn ;; Note use back-tick, so we can unquote the value of baz-id
-                `[[:db/retract ~val-id :community/name ~val]]))
-
-  
-  ;; Syntax to define a schema
-  ;; Name/Type/Cardinality/doc/install
-  ;; with fulltext and unique being optional  
-  (def music-schema
-    [
-     ;; ARTIST
-     {:db/id #db/id [:db.part/db]
-      :db/ident :artist/name
-      :db/valueType :db.type/string
-      :db/cardinality :db.cardinality/one
-      :db/fulltext true
-      :db/doc "Artist Name"
-      :db.install/_attribute :db.part/db}
-     
-     {:db/id #db/id [:db.part/db]
-      :db/ident :artist/yomi
-      :db/valueType :db.type/string
-      :db/cardinality :db.cardinality/one
-      :db/fulltext true
-      :db/doc "Artist Yomi"
-      :db.install/_attribute :db.part/db}
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :artist/id
-      :db/valueType :db.type/long
-      :db/cardinality :db.cardinality/one
-      :db/unique :db.unique/identity
-      :db/doc "External Artist ID"
-      :db.install/_attribute :db.part/db}
-
-     ;; ALBUM
-     {:db/id #db/id [:db.part/db]
-      :db/ident :album/name
-      :db/valueType :db.type/string
-      :db/cardinality :db.cardinality/one
-      :db/fulltext true
-      :db/doc "Album Name"
-      :db.install/_attribute :db.part/db}     
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :album/yomi
-      :db/valueType :db.type/string
-      :db/cardinality :db.cardinality/one
-      :db/fulltext true
-      :db/doc "Album Yomi"
-      :db.install/_attribute :db.part/db}
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :album/id
-      :db/valueType :db.type/long
-      :db/cardinality :db.cardinality/one
-      :db/unique :db.unique/identity
-      :db/doc "External Album ID"
-      :db.install/_attribute :db.part/db}
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :album/artist
-      :db/valueType :db.type/ref
-      :db/cardinality :db.cardinality/one
-      :db/doc "Album's Artist"
-      :db.install/_attribute :db.part/db}
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :album/volume
-      :db/valueType :db.type/long
-      :db/cardinality :db.cardinality/one
-      :db/doc "Album Volume"
-      :db.install/_attribute :db.part/db}
-
-     ;; TRACK
-     {:db/id #db/id [:db.part/db]
-      :db/ident :track/name
-      :db/valueType :db.type/string
-      :db/cardinality :db.cardinality/one
-      :db/fulltext true
-      :db/doc "Track Name"
-      :db.install/_attribute :db.part/db}     
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :track/yomi
-      :db/valueType :db.type/string
-      :db/cardinality :db.cardinality/one
-      :db/fulltext true
-      :db/doc "Track Yomi"
-      :db.install/_attribute :db.part/db}
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :track/id
-      :db/valueType :db.type/long
-      :db/cardinality :db.cardinality/one
-      :db/unique :db.unique/identity
-      :db/doc "External Track ID"
-      :db.install/_attribute :db.part/db}
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :track/num
-      :db/valueType :db.type/long
-      :db/cardinality :db.cardinality/one
-      :db/doc "Track Num"
-      :db.install/_attribute :db.part/db}
-
-     {:db/id #db/id [:db.part/db]
-      :db/ident :track/album
-      :db/valueType :db.type/ref
-      :db/cardinality :db.cardinality/one
-      :db/doc "Track's Album"
-      :db.install/_attribute :db.part/db}
-     
-     {:db/id #db/id [:db.part/db]
-      :db/ident :track/artist
-      :db/valueType :db.type/ref
-      :db/cardinality :db.cardinality/one
-      :db/doc "Track's Artist"
-      :db.install/_attribute :db.part/db}
-     ])
-
-  ;; Apply Schema
-  (d/transact conn music-schema)
-
-  ;; Add some relation data to datomic
-  ;; ---------------------------------
-  
-  ;; This helps
-  (defn create-rec [data]
-    "Given a map, generates the associated datalog record
-     and returns [rec-tempid datalog]"
-    (let [eid (d/tempid :db.part/user)]
-      [eid (map (fn [[k v]]
-                  `{:db/id ~eid ~k ~v})
-                data)]))
-
-  ;; Now generate the datalog/sql and submit
-  (let [[artist-eid artist-sql] (create-rec {:artist/id   166
-                                             :artist/name "Nirvana"
-                                             :artist/yomi "ニルバーナ"})
-        [album-eid album-sql]   (create-rec {:album/id    5
-                                 :album/name "Nevermind"
-                                 :album/yomi "ネバーマインド"
-                                 :album/volume 999999999
-                                 :album/artist artist-eid})
-        track-details           [["Smells Like Teen Spirit" 1 101]
-                                 ["In Bloom" 2 102]
-                                 ["Come As You Are" 3 103]
-                                 ["Breed" 4 104]
-                                 ["Lithium" 5 105]
-                                 ["Polly" 6 106]
-                                 ["Territorial Pissings" 7 107]
-                                 ["Drain You" 8 108]
-                                 ["Lounge Act" 9 109]
-                                 ["Stay Away" 10 110]
-                                 ["On A Plain" 11 111]
-                                 ["Something In The Way, with the hidden track" 12 112]]        
-        track-sql               (->> track-details
-                                     (map (fn [trk] (->> (conj trk album-eid)
-                                                         (zipmap [:track/name :track/num :track/id :track/album])
-                                                         create-rec
-                                                         second)))
-                                     flatten)
-        sql (vec (concat artist-sql album-sql track-sql))
-        ]
-    (d/transact conn sql))
-  
-
-  ;; Submit an annotated transaction
-  ;; -------------------------------
-
-  ;; Modify schema to include extra transaction data
+  ;; Add new properties
   (d/transact conn
               '[{:db/id #db/id[:db.part/db]
-                 :db/ident :data/awesomeness
-                 :db/valueType :db.type/string
-                 :db/cardinality :db.cardinality/one
-                 :db/doc "How awesome is this transaction"
-                 :db.install/_attribute :db.part/db}
+                  :db/ident :citeproc/title
+                  :db/valueType :db.type/string
+                  :db/cardinality :db.cardinality/one
+                  :db/doc "CSL title"
+                  :db.install/_attribute :db.part/db}
+                {:db/id #db/id[:db.part/db]
+                  :db/ident :citeproc/author
+                  :db/doc "CSL author"
+                  :db/valueType :db.type/string
+                  :db/cardinality :db.cardinality/many
+                  :db.install/_attribute :db.part/db}
                 ])
+  (let [proj-id (-> (d/q '[:find ?c
+                        :where
+                        [?c :project/name "Chemistry 101"]] (d/db conn))
+                   first
+                   first)]
+    (d/transact conn
+                `[{:db/id #db/id[:db.part/user]
+                   :reference/project ~proj-id
+                   :citeproc/title "À la recherche du temps perdu"
+                   :citeproc/author "Marcel Proust"
+                   }
+                  {:db/id #db/id[:db.part/user]
+                   :reference/project ~proj-id
+                   :citeproc/title "Les plaisirs et les jour"
+                   :citeproc/author "Marcel Proust"
+                   }
+                  ]))
 
-  ;; Submit transaction with extra transaction data
-  (d/transact conn
-              '[{:db/id #db/id[:db.part/user]
-                 :community/name "foo2"}
-                {:db/id #db/id[:db.part/tx]
-                 :data/awesomeness "Totally awesome!"}])  
+  (defn projects-with-works-by-proust [db]
+    (d/q '[:find [?p ?p_title]
+          :where
+          [?p :project/name ?p_title]
+          [?r :reference/project ?p]
+          [?r :citeproc/author "Marcel Proust"]]
+         db))
 
-  ;; Find our awesome new transaction
-  (q '[:find ?c ?n :where [?c :data/awesomeness ?n]] (db conn))
+  (def prior-state (d/db conn))
 
+  ;; Updates and deletions
+
+  ;; Transaction, update records
+  (let [proj-id (-> (d/q '[:find ?c
+                        :where
+                        [?c :project/name "Chemistry 101"]] (d/db conn))
+                   first
+                   first)]
+    (d/transact conn ;; Note use back-tick, so we can unquote the value of baz-id
+                `[{:db/id ~proj-id :project/name "French Literature"}]))
+
+  (defn n-users [db]
+    (->> db
+         (d/q '[:find ?u :where [?u :user/name]])
+         count
+         (str "Users: ")))
+
+  (n-users (d/db conn))
+
+  ;; Transaction, delete record
+  (let [delendum (-> (d/q '[:find ?c
+                        :where
+                        [?c :user/name "foo"]]
+                      (d/db conn))
+                   first
+                   first)] ;; get the ID to modify
+    (d/transact conn
+                `[[:db/retract ~delendum :user/name "foo"]]))
+
+  (n-users (d/db conn))
+  (n-users prior-state)
+
+  ;; Finding changes
+
+  (d/q '[:find ?when
+      :where
+      [?tx :db/txInstant ?when]]
+    (d/db conn))
+
+  (let [changes-since-snapshot (d/since (d/db conn)
+                                        (d/basis-t prior-state))]
+    (d/q '[:find ?when
+          :where
+          [?tx :db/txInstant ?when]]
+         changes-since-snapshot))
+
+  ;; Analysing history:
+
+  ;; Query and define the various DB states
+  (def db-dates (->> (d/q '[:find ?when
+                          :where
+                          [?tx :db/txInstant ?when]]
+                        (d/db conn))
+                     seq
+                     (map first)
+                     sort))
+
+  ;; Query against the past db state
+  (let [db (d/db conn)
+        query '[:find ?p_name :where [?p :project/name ?p_name]]]
+    (for [date db-dates]
+      [date
+       (->> (d/as-of db date)
+            (d/q query)
+            (apply concat)
+            vec)]))
+
+  (let [db (d/db conn)
+        query '[:find ?u :where [?u :user/name]]]
+    (for [date db-dates]
+      [date
+       (->> (d/as-of db date)
+            (d/q query)
+            (apply concat)
+            count)]))
   
   ) ;; END COMMENT SECTION
