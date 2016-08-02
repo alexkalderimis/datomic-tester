@@ -7,6 +7,13 @@ Datamic tutorial for Java found here: http://datomic.com/company/resources/tutor
 
 For reference only.
 
+I recommend using `vim-fireplace` and `nrepl` to play around with this, just make
+sure to run the repl the background first:
+
+```
+lein repl
+```
+
 ## License
 
 Copyright (C) 2012 Gracenote KK
